@@ -21,9 +21,15 @@ class CoinGeckoAPI:
     def get_historical_data(self, coin_id: str, vs_currency: str = 'usd', days: int = 30) -> pd.DataFrame:
         """Get historical OHLC data for a cryptocurrency"""
         endpoint = f"{self.base_url}/coins/{coin_id}/ohlc"
+
+        # CoinGecko OHLC API limits: 1, 7, 14, 30, 90, 180, 365
+        # Map requested days to valid API values
+        valid_days = [1, 7, 14, 30, 90, 180, 365]
+        api_days = min([d for d in valid_days if d >= days], default=365)
+
         params = {
             'vs_currency': vs_currency,
-            'days': days
+            'days': api_days
         }
 
         try:
@@ -31,11 +37,20 @@ class CoinGeckoAPI:
             response.raise_for_status()
             data = response.json()
 
+            if not data:
+                print(f"No data returned for {coin_id}")
+                return pd.DataFrame()
+
             df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
 
+            # Convert to numeric types
+            for col in ['open', 'high', 'low', 'close']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
             return df
+
         except requests.RequestException as e:
             print(f"Error fetching data for {coin_id}: {e}")
             return pd.DataFrame()
@@ -60,10 +75,13 @@ class CoinGeckoAPI:
 
     def resample_data(self, df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """Resample OHLC data to different timeframes"""
+        if df.empty:
+            return pd.DataFrame()
+
         timeframe_map = {
-            '4H': '4H',
-            '6H': '6H',
-            '12H': '12H',
+            '4H': '4h',
+            '6H': '6h',
+            '12H': '12h',
             '1D': '1D',
             '2D': '2D',
             '3D': '3D',
@@ -73,11 +91,24 @@ class CoinGeckoAPI:
         if timeframe not in timeframe_map:
             return df
 
-        resampled = df.resample(timeframe_map[timeframe]).agg({
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last'
-        }).dropna()
+        try:
+            # Check if DataFrame has datetime index
+            if not isinstance(df.index, pd.DatetimeIndex):
+                print(f"Error: DataFrame must have DatetimeIndex for resampling")
+                return pd.DataFrame()
 
-        return resampled
+            resampled = df.resample(timeframe_map[timeframe]).agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last'
+            }).dropna()
+
+            # Ensure we have enough data for analysis
+            if len(resampled) < 25:  # Need at least 25 periods for EMA calculation
+                print(f"Warning: Only {len(resampled)} periods for {timeframe}, may not be sufficient")
+
+            return resampled
+        except Exception as e:
+            print(f"Error resampling {timeframe}: {e}")
+            return pd.DataFrame()
