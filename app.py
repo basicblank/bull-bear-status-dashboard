@@ -78,14 +78,15 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
 
 # Days of historical data based on timeframe
+# CoinGecko API: ≤30 days = hourly data, >30 days = daily data
 timeframe_days = {
-    '4H': 7,
-    '6H': 10,
-    '12H': 15,
-    '1D': 30,
-    '2D': 60,
-    '3D': 90,
-    '1W': 180
+    '4H': 30,    # 30 days = ~180 hourly periods → 4H resampling
+    '6H': 30,    # 30 days = ~180 hourly periods → 6H resampling
+    '12H': 30,   # 30 days = ~180 hourly periods → 12H resampling
+    '1D': 90,    # 90 days = ~90 daily periods → 1D resampling
+    '2D': 365,   # 365 days = ~365 daily periods → 2D resampling (~180 periods)
+    '3D': 365,   # 365 days = ~365 daily periods → 3D resampling (~120 periods)
+    '1W': 365    # 365 days = ~365 daily periods → 1W resampling (~52 periods)
 }
 
 days = timeframe_days.get(selected_timeframe, 30)
@@ -96,12 +97,19 @@ def fetch_crypto_data(crypto_id, days, timeframe):
     try:
         df = api.get_historical_data(crypto_id, days=days)
         if df.empty:
+            st.warning(f"No historical data available for {crypto_id}")
             return None, None
 
         # Resample data to selected timeframe
         resampled_df = api.resample_data(df, timeframe)
 
         if resampled_df.empty:
+            st.warning(f"No data available for {crypto_id} at {timeframe} timeframe. Try a different timeframe.")
+            return None, None
+
+        # Check if we have enough data for EMA calculation
+        if len(resampled_df) < 25:
+            st.warning(f"Insufficient data for {crypto_id} at {timeframe} timeframe ({len(resampled_df)} periods). Need at least 25 periods for reliable EMA analysis.")
             return None, None
 
         # Analyze trends
