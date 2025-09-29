@@ -1,0 +1,33 @@
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Streamlit cache
+.streamlit/
+
+# Test files
+test_app.py
+
+# Alternative dashboard files (not needed for GitHub)
+simple_dashboard.py
+web_dashboard.py
+run.py
